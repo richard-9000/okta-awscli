@@ -7,7 +7,8 @@ from collections import namedtuple
 from configparser import RawConfigParser
 import boto3
 from botocore.exceptions import ClientError
-
+import re
+import requests
 
 class AwsAuth():
     """ Methods to support AWS authentication using STS """
@@ -44,12 +45,20 @@ class AwsAuth():
 of roles assigned to you.""" % self.role)
                 self.logger.info("Please choose a role.")
 
-        role_options = self.__create_options_from(roles)
+        alias_map = self.__get_account_alias(assertion)
+        role_options = self.__create_options_from(roles, alias_map)
         for option in role_options:
             print(option)
 
         role_choice = int(input('Please select the AWS role: ')) - 1
         return roles[role_choice]
+
+    @staticmethod
+    def __get_account_alias(assertion):
+        """ Find the alias for accounts """
+        response = requests.post('https://signin.aws.amazon.com/saml', data={'SAMLResponse': assertion})
+        accounts = re.findall(r'Account: ([^\s]+) \((\d{12})\)', response.text)
+        return { tup[1] : tup[0] for tup in accounts }
 
     @staticmethod
     def get_sts_token(role_arn, principal_arn, assertion, duration=None, logger=None):
@@ -140,19 +149,26 @@ of roles assigned to you.""" % self.role)
         aws_attribute_role = 'https://aws.amazon.com/SAML/Attributes/Role'
         attribute_value_urn = '{urn:oasis:names:tc:SAML:2.0:assertion}AttributeValue'
         roles = []
-        role_tuple = namedtuple("RoleTuple", ["principal_arn", "role_arn"])
         root = ET.fromstring(base64.b64decode(assertion))
+        role_tuple = namedtuple("RoleTuple", ["principal_arn", "role_arn"])
         for saml2attribute in root.iter('{urn:oasis:names:tc:SAML:2.0:assertion}Attribute'):
             if saml2attribute.get('Name') == aws_attribute_role:
-                for saml2attributevalue in saml2attribute.iter(attribute_value_urn):
-                    roles.append(role_tuple(*saml2attributevalue.text.split(',')))
+                for attrvalue in saml2attribute.iter(attribute_value_urn):
+                    # Role and Principal arns can be in any order and/or from separate accounts.
+                    role_arn = re.findall(r'arn:aws:iam::\d{12}:role/[^,]*', attrvalue.text)[0]
+                    principal_arn = re.findall(r'arn:aws:iam::\d{12}:saml-provider/[^,]*', attrvalue.text)[0]
+                    roles.append(role_tuple(principal_arn, role_arn))
         return roles
 
     @staticmethod
-    def __create_options_from(roles):
+    def __create_options_from(roles, alias_map):
         options = []
         for index, role in enumerate(roles):
-            options.append("%d: %s" % (index + 1, role.role_arn))
+            account_number = re.findall(r'arn:aws:iam::(\d{12})', role.role_arn)[0]
+            if account_number in alias_map:
+                options.append("%d: %s (%s)" % (index + 1, role.role_arn, alias_map[account_number]))
+            else: 
+                options.append("%d: %s" % (index + 1, role.role_arn))
         return options
 
     def __find_predefiend_role_from(self, roles):
