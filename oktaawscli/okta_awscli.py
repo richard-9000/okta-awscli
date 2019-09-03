@@ -10,15 +10,18 @@ from oktaawscli.okta_auth_config import OktaAuthConfig
 from oktaawscli.aws_auth import AwsAuth
 
 def get_credentials(aws_auth, okta_profile, profile,
-                    verbose, logger, totp_token, cache):
+                    verbose, logger, totp_token, cache, alias):
     """ Gets credentials from Okta """
 
     okta_auth_config = OktaAuthConfig(logger)
     okta = OktaAuth(okta_profile, verbose, logger, totp_token, okta_auth_config)
 
     _, assertion = okta.get_assertion()
-    role = aws_auth.choose_aws_role(assertion)
+    (role, option) = aws_auth.choose_aws_role(assertion)
     principal_arn, role_arn = role
+
+    if alias:
+        okta_profile=profile = "%s-%s" % (option.alias_name, option.role_name)
 
     okta_auth_config.save_chosen_role_for_profile(okta_profile, role_arn)
     duration = okta_auth_config.duration_for(okta_profile)
@@ -45,9 +48,13 @@ def get_credentials(aws_auth, okta_profile, profile,
             cache.close()
         exit(0)
     else:
+        if alias:
+            aws_auth.write_sts_token(option.alias_name, access_key_id,
+                                     secret_access_key, session_token)
         aws_auth.write_sts_token(profile, access_key_id,
                                  secret_access_key, session_token)
 
+    return profile
 
 def console_output(access_key_id, secret_access_key, session_token, verbose):
     """ Outputs STS credentials to console """
@@ -79,9 +86,10 @@ created. If omitted, credentials will output to console.\n")
 @click.option('-c', '--cache', is_flag=True, help='Cache the default profile credentials \
 to ~/.okta-credentials.cache\n')
 @click.option('-t', '--token', help='TOTP token from your authenticator app')
+@click.option('-l', '--alias', is_flag=True, help='Use profile from chosen role/alias: <alias>-<role-name>')
 @click.argument('awscli_args', nargs=-1, type=click.UNPROCESSED)
 def main(okta_profile, profile, verbose, version,
-         debug, force, cache, awscli_args, token):
+         debug, force, cache, awscli_args, token, alias):
     """ Authenticate to awscli using Okta """
     if version:
         print(__version__)
@@ -101,6 +109,12 @@ def main(okta_profile, profile, verbose, version,
 
     if not okta_profile:
         okta_profile = "default"
+
+    if alias:
+        okta_profile = "temporary-cli-aws-profile"
+        profile = None
+        force=True
+
     aws_auth = AwsAuth(profile, okta_profile, verbose, logger)
     if not aws_auth.check_sts_token(profile) or force:
         if force and profile:
@@ -109,8 +123,8 @@ def main(okta_profile, profile, verbose, version,
         elif force:
             logger.info("Force option selected, but no profile provided. \
                 Option has no effect.")
-        get_credentials(
-            aws_auth, okta_profile, profile, verbose, logger, token, cache
+        profile = get_credentials(
+            aws_auth, okta_profile, profile, verbose, logger, token, cache, alias
         )
 
     if awscli_args:

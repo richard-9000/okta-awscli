@@ -48,10 +48,10 @@ of roles assigned to you.""" % self.role)
         alias_map = self.__get_account_alias(assertion)
         role_options = self.__create_options_from(roles, alias_map)
         for option in role_options:
-            print(option)
+            print(option.option_text)
 
         role_choice = int(input('Please select the AWS role: ')) - 1
-        return roles[role_choice]
+        return roles[role_choice], role_options[role_choice]
 
     @staticmethod
     def __get_account_alias(assertion):
@@ -163,12 +163,17 @@ of roles assigned to you.""" % self.role)
     @staticmethod
     def __create_options_from(roles, alias_map):
         options = []
+        option_tuple = namedtuple("OptionTuple", ["option_text", "alias_name", "role_name"])
         for index, role in enumerate(roles):
-            account_number = re.findall(r'arn:aws:iam::(\d{12})', role.role_arn)[0]
+            (account_number, role_name) = re.findall(r'arn:aws:iam::(\d{12}):role.*/([^/]+)$', role.role_arn)[0]
             if account_number in alias_map:
-                options.append("%d: %s (%s)" % (index + 1, role.role_arn, alias_map[account_number]))
+                role_text = "%d: %s (%s)" % (index + 1, role.role_arn, alias_map[account_number])
+                alias_name = alias_map[account_number]
             else: 
-                options.append("%d: %s" % (index + 1, role.role_arn))
+                role_text = "%d: %s" % (index + 1, role.role_arn)
+                alias_name = account_number
+
+            options.append(option_tuple(role_text, alias_name, role_name))
         return options
 
     def __find_predefiend_role_from(self, roles):
