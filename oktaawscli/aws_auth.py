@@ -158,6 +158,7 @@ of roles assigned to you.""" % self.role)
                     role_arn = re.findall(r'arn:aws:iam::\d{12}:role/[^,]*', attrvalue.text)[0]
                     principal_arn = re.findall(r'arn:aws:iam::\d{12}:saml-provider/[^,]*', attrvalue.text)[0]
                     roles.append(role_tuple(principal_arn, role_arn))
+        roles.sort(key = lambda x: x.role_arn)
         return roles
 
     @staticmethod
