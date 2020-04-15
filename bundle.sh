@@ -15,6 +15,7 @@ usage () {
 # Print the script header
 cat <<MAGIC
 #!/bin/bash
+set -e
 cat > ~/.okta-aws <<EOF
 [default]
 base-url = $1.okta.com
@@ -29,7 +30,22 @@ cat `ls -x1 dist/*.egg|tail -1` | base64
 # Print the script footer
 cat <<MAGIC
 EOFEGGFILE
-python3 -m easy_install $1_install.egg
+if [ \`id -un\` = "root" ]; then
+  python3 -m easy_install lendingclub_install.egg
+else
+  python3 -m easy_install --user lendingclub_install.egg
+  cat <<'INSTALLMSG'
+The okta aws cli has been installed in your home directory, and can
+be run with the following command:
+
+  ~/.local/bin/okta-awscli -l
+
+For convenience, add the following line to your .bash_profile or .bashrc:
+
+PATH="\$PATH:~/.local/bin"
+
+INSTALLMSG
+fi
 rm $1_install.egg
 MAGIC
 
