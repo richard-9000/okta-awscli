@@ -5,3 +5,5 @@ dist
 .idea/*
 tests/*
 .vscode/*
+build
+*okta_awscli_install.sh
