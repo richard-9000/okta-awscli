@@ -9,19 +9,21 @@ from oktaawscli.okta_auth import OktaAuth
 from oktaawscli.okta_auth_config import OktaAuthConfig
 from oktaawscli.aws_auth import AwsAuth
 
-def get_credentials(aws_auth, okta_profile, profile,
-                    verbose, logger, totp_token, cache, alias):
+
+def get_credentials(aws_auth, okta_profile, profile, verbose, logger, totp_token, cache, alias):
     """ Gets credentials from Okta """
 
     okta_auth_config = OktaAuthConfig(logger)
     okta = OktaAuth(okta_profile, verbose, logger, totp_token, okta_auth_config)
 
     _, assertion = okta.get_assertion()
-    (role, option) = aws_auth.choose_aws_role(assertion)
-    principal_arn, role_arn = role
-
-    if alias:
-        okta_profile=profile = "%s-%s" % (option.alias_name, option.role_name)
+    if not alias:
+        role = aws_auth.choose_aws_role(assertion)
+        principal_arn, role_arn = role
+    else:
+        (role, option) = aws_auth.choose_aws_role(assertion)
+        principal_arn, role_arn = role
+        okta_profile = profile = "%s-%s" % (option.alias_name, option.role_name)
 
     okta_auth_config.save_chosen_role_for_profile(okta_profile, role_arn)
     duration = okta_auth_config.duration_for(okta_profile)
@@ -56,6 +58,7 @@ def get_credentials(aws_auth, okta_profile, profile,
 
     return profile
 
+
 def console_output(access_key_id, secret_access_key, session_token, verbose):
     """ Outputs STS credentials to console """
     if verbose:
@@ -73,23 +76,17 @@ def console_output(access_key_id, secret_access_key, session_token, verbose):
 # pylint: disable=R0913
 @click.command()
 @click.option('-v', '--verbose', is_flag=True, help='Enables verbose mode')
-@click.option('-V', '--version', is_flag=True,
-              help='Outputs version number and exits')
+@click.option('-V', '--version', is_flag=True, help='Outputs version number and exits')
 @click.option('-d', '--debug', is_flag=True, help='Enables debug mode')
-@click.option('-f', '--force', is_flag=True, help='Forces new STS credentials. \
-Skips STS credentials validation.')
-@click.option('--okta-profile', help="Name of the profile to use in .okta-aws. \
-If none is provided, then the default profile will be used.\n")
-@click.option('--profile', help="Name of the profile to store temporary \
-credentials in ~/.aws/credentials. If profile doesn't exist, it will be \
-created. If omitted, credentials will output to console.\n")
-@click.option('-c', '--cache', is_flag=True, help='Cache the default profile credentials \
-to ~/.okta-credentials.cache\n')
-@click.option('-t', '--token', help='TOTP token from your authenticator app')
+@click.option('-f', '--force', is_flag=True, help='Forces new STS credentials. Skips STS credentials validation.')
+@click.option('-c', '--cache', is_flag=True, help='Cache the default profile credentials to ~/.okta-credentials.cache\n')
 @click.option('-l', '--alias', is_flag=True, help='Use profile from chosen role/alias: <alias>-<role-name>')
+@click.option('--okta-profile', help="Name of the profile to use in .okta-aws. If none is provided, then the default profile will be used.\n")
+@click.option('-p', '--profile', help="Name of the profile to store temporary credentials in ~/.aws/credentials. If profile doesn't exist, it will be created. "
+                                      "If omitted, credentials will output to console.\n")
+@click.option('-t', '--token', help='TOTP token from your authenticator app')
 @click.argument('awscli_args', nargs=-1, type=click.UNPROCESSED)
-def main(okta_profile, profile, verbose, version,
-         debug, force, cache, awscli_args, token, alias):
+def main(okta_profile, profile, verbose, version, debug, force, cache, awscli_args, token, alias):
     """ Authenticate to awscli using Okta """
     if version:
         print(__version__)
@@ -101,7 +98,7 @@ def main(okta_profile, profile, verbose, version,
     handler.setLevel(logging.WARN)
     formatter = logging.Formatter('%(levelname)s - %(message)s')
     handler.setFormatter(formatter)
-    if verbose:
+    if verbose and not debug:
         handler.setLevel(logging.INFO)
     if debug:
         handler.setLevel(logging.DEBUG)
@@ -113,7 +110,7 @@ def main(okta_profile, profile, verbose, version,
     if alias:
         okta_profile = "temporary-cli-aws-profile"
         profile = None
-        force=True
+        force = True
 
     aws_auth = AwsAuth(profile, okta_profile, verbose, logger)
     if not aws_auth.check_sts_token(profile) or force:

@@ -10,7 +10,8 @@ from botocore.exceptions import ClientError
 import re
 import requests
 
-class AwsAuth():
+
+class AwsAuth:
     """ Methods to support AWS authentication using STS """
 
     def __init__(self, profile, okta_profile, verbose, logger):
@@ -30,10 +31,8 @@ class AwsAuth():
             self.role = parser.get(okta_profile, 'role')
             self.logger.debug("Setting AWS role to %s" % self.role)
 
-
     def choose_aws_role(self, assertion):
         """ Choose AWS role from SAML assertion """
-
         roles = self.__extract_available_roles_from(assertion)
         if self.role:
             predefined_role = self.__find_predefiend_role_from(roles)
@@ -58,7 +57,7 @@ of roles assigned to you.""" % self.role)
         """ Find the alias for accounts """
         response = requests.post('https://signin.aws.amazon.com/saml', data={'SAMLResponse': assertion})
         accounts = re.findall(r'Account: ([^\s]+) \((\d{12})\)', response.text)
-        return { tup[1] : tup[0] for tup in accounts }
+        return {tup[1]: tup[0] for tup in accounts}
 
     @staticmethod
     def get_sts_token(role_arn, principal_arn, assertion, duration=None, logger=None):
@@ -79,7 +78,7 @@ of roles assigned to you.""" % self.role)
         except ClientError as ex:
             if logger:
                 logger.error(
-                    "Could not retrieve credentials: %s" % 
+                    "Could not retrieve credentials: %s" %
                     ex.response['Error']['Message']
                 )
                 exit(-1)
@@ -158,7 +157,7 @@ of roles assigned to you.""" % self.role)
                     role_arn = re.findall(r'arn:aws:iam::\d{12}:role/[^,]*', attrvalue.text)[0]
                     principal_arn = re.findall(r'arn:aws:iam::\d{12}:saml-provider/[^,]*', attrvalue.text)[0]
                     roles.append(role_tuple(principal_arn, role_arn))
-        roles.sort(key = lambda x: x.role_arn)
+        roles.sort(key=lambda x: x.role_arn)
         return roles
 
     @staticmethod
@@ -168,9 +167,9 @@ of roles assigned to you.""" % self.role)
         for index, role in enumerate(roles):
             (account_number, role_name) = re.findall(r'arn:aws:iam::(\d{12}):role.*/([^/]+)$', role.role_arn)[0]
             if account_number in alias_map:
-                role_text = "%d: %s (%s)" % (index + 1, role.role_arn, alias_map[account_number])
+                role_text = "%d: %s (%s)" % (index + 1, alias_map[account_number], role.role_arn)
                 alias_name = alias_map[account_number]
-            else: 
+            else:
                 role_text = "%d: %s" % (index + 1, role.role_arn)
                 alias_name = account_number
 
