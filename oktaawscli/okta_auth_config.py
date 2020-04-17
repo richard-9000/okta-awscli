@@ -2,7 +2,7 @@
 
 import os
 
-from configparser import RawConfigParser
+from configparser import RawConfigParser, ConfigParser
 from getpass import getpass
 
 try:
@@ -10,13 +10,25 @@ try:
 except NameError:
     pass
 
-class OktaAuthConfig():
+
+class OktaAuthConfig:
     """ Config helper class """
+
     def __init__(self, logger):
         self.logger = logger
-        self.config_path = os.path.expanduser('~') + '/.okta-aws'
-        self._value = RawConfigParser()
-        self._value.read(self.config_path)
+        self.config_path = os.path.join(os.path.expanduser('~'), '.okta-aws')
+        if os.path.exists(self.config_path) and os.path.getsize(self.config_path) > 0:
+            self._value = RawConfigParser()
+            self._value.read(self.config_path)
+        else:
+            print("Config path: {} does not exist".format(self.config_path))
+            new_cfg = ConfigParser()
+            base_url = input("What is your organization's login url? ")
+
+            new_cfg["default"] = {'base-url': base_url}
+            with open(self.config_path, 'w') as cp:
+                new_cfg.write(cp)
+            self._value = new_cfg
 
     def base_url_for(self, okta_profile):
         """ Gets base URL from config """

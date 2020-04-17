@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup as bs
 try:
     from u2flib_host import u2f, exc
     from u2flib_host.constants import APDU_WRONG_DATA
+
     U2F_ALLOWED = True
 except ImportError:
     U2F_ALLOWED = False
@@ -23,8 +24,10 @@ try:
 except NameError:
     pass
 
+
 class OktaAuth():
     """ Handles auth to Okta and returns SAML assertion """
+
     def __init__(self, okta_profile, verbose, logger, totp_token, okta_auth_config):
         self.okta_profile = okta_profile
         self.totp_token = totp_token
@@ -73,7 +76,6 @@ Please enroll an MFA factor in the Okta Web UI first!""")
             self.logger.error(resp_json)
             exit(1)
 
-
         return session_token
 
     def verify_mfa(self, factors_list, state_token):
@@ -89,12 +91,12 @@ Please enroll an MFA factor in the Okta Web UI first!""")
                 supported_factors.append(factor)
             else:
                 self.logger.error("Unsupported factorType: %s" %
-                                 (factor['factorType'],))
+                                  (factor['factorType'],))
 
         supported_factors = sorted(supported_factors,
-                                   key=lambda factor: (
-                                       factor['provider'],
-                                       factor['factorType']))
+                                   key=lambda f: (
+                                       f['provider'],
+                                       f['factorType']))
         if len(supported_factors) == 1:
             session_token = self.verify_single_factor(
                 supported_factors[0], state_token)
@@ -113,7 +115,7 @@ Please enroll an MFA factor in the Okta Web UI first!""")
                     else:
                         factor_name = "Okta Verify"
                 elif factor_provider == "FIDO":
-                        factor_name = "u2f"
+                    factor_name = "u2f"
                 else:
                     factor_name = "Unsupported factor type: %s" % factor_provider
 
@@ -156,7 +158,7 @@ Please enroll an MFA factor in the Okta Web UI first!""")
         if 'status' in resp_json:
             if resp_json['status'] == "SUCCESS":
                 return resp_json['sessionToken']
-            elif resp_json['status'] == "MFA_CHALLENGE" and factor['factorType'] !='u2f':
+            elif resp_json['status'] == "MFA_CHALLENGE" and factor['factorType'] != 'u2f':
                 print("Waiting for push verification...")
                 while True:
                     resp = requests.post(
@@ -191,7 +193,7 @@ Please enroll an MFA factor in the Okta Web UI first!""")
                     for device in devices:
                         with device as dev:
                             try:
-                                auth_response = u2f.authenticate(dev, challenge, resp_json['_embedded']['factor']['profile']['appId'] )
+                                auth_response = u2f.authenticate(dev, challenge, resp_json['_embedded']['factor']['profile']['appId'])
                                 req_data.update(auth_response)
                                 resp = requests.post(resp_json['_links']['next']['href'], json=req_data)
                                 resp_json = resp.json()
@@ -239,7 +241,7 @@ Please enroll an MFA factor in the Okta Web UI first!""")
                 Exiting.")
             sys.exit(1)
 
-        aws_apps = sorted(aws_apps, key=lambda app: app['sortOrder'])
+        aws_apps = sorted(aws_apps, key=lambda a: a['sortOrder'])
         app_choice = 0 if len(aws_apps) == 1 else None
         if app_choice is None:
             print("Available apps:")
@@ -251,7 +253,8 @@ Please enroll an MFA factor in the Okta Web UI first!""")
         self.logger.debug("Selected app: %s" % aws_apps[app_choice]['label'])
         return aws_apps[app_choice]['label'], aws_apps[app_choice]['linkUrl']
 
-    def get_simple_assertion(self, html):
+    @staticmethod
+    def get_simple_assertion(html):
         soup = bs(html.text, "html.parser")
         for input_tag in soup.find_all('input'):
             if input_tag.get('name') == 'SAMLResponse':
@@ -323,7 +326,6 @@ Please enroll an MFA factor in the Okta Web UI first!""")
         else:
             raise RuntimeError('Unknown login status: ' + status)
 
-
     def _get_initial_flow_state(self, embed_link, state_token=None):
         """ Starts the authentication flow with Okta"""
         if state_token is None:
@@ -341,7 +343,8 @@ Please enroll an MFA factor in the Okta Web UI first!""")
 
         return {'stateToken': state_token, 'apiResponse': response.json()}
 
-    def _get_headers(self):
+    @staticmethod
+    def _get_headers():
         return {
             'User-Agent': 'Okta-awscli/0.0.1',
             'Accept': 'application/json',
@@ -396,7 +399,6 @@ Please enroll an MFA factor in the Okta Web UI first!""")
             return {'stateToken': response_data['stateToken'], 'apiResponse': response_data}
         if 'sessionToken' in response_data:
             return {'stateToken': None, 'sessionToken': response_data['sessionToken'], 'apiResponse': response_data}
-
 
     def _login_send_push(self, state_token, factor):
         """ Send 'push' for the Okta Verify mobile app """
@@ -485,7 +487,7 @@ Please enroll an MFA factor in the Okta Web UI first!""")
             # print out the factors and let the user select
             for i, factor in enumerate(factors):
                 factor_name = self._build_factor_name(factor)
-                if factor_name is not "":
+                if factor_name != "":
                     print('[ %d ] %s' % (i, factor_name))
             selection = input("Selection: ")
 
@@ -510,4 +512,4 @@ Please enroll an MFA factor in the Okta Web UI first!""")
         elif factor['factorType'] == 'token':
             return factor['factorType'] + ": " + factor['profile']['credentialId']
         else:
-            return ("Unknown MFA type: " + factor['factorType'])
+            return "Unknown MFA type: " + factor['factorType']
