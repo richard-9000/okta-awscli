@@ -10,22 +10,39 @@ from oktaawscli.okta_auth_config import OktaAuthConfig
 from oktaawscli.aws_auth import AwsAuth
 
 
-def get_credentials(aws_auth, okta_profile, profile, verbose, logger, totp_token, cache, alias):
+def get_credentials(aws_auth, okta_profile, profile, verbose, logger, totp_token, cache, alias, okta_auth_config=None):
     """ Gets credentials from Okta """
 
-    okta_auth_config = OktaAuthConfig(logger)
     okta = OktaAuth(okta_profile, verbose, logger, totp_token, okta_auth_config)
 
     _, assertion = okta.get_assertion()
     if not alias:
         role = aws_auth.choose_aws_role(assertion)
         principal_arn, role_arn = role
+        return setup_credentials(okta_auth_config, okta_profile, role_arn, aws_auth, principal_arn, assertion, logger, profile, verbose, cache, alias, None)
     else:
-        (role, option) = aws_auth.choose_aws_role(assertion)
-        principal_arn, role_arn = role
-        okta_profile = profile = "%s-%s" % (option.alias_name, option.role_name)
+        choices = aws_auth.choose_aws_role(assertion)
+        for c in choices:
+            (role, option) = c
+            principal_arn, role_arn = role
+            okta_profile = profile = "%s-%s" % (option.alias_name, option.role_name)
+            return setup_credentials(okta_auth_config,
+                                     okta_profile,
+                                     role_arn,
+                                     aws_auth,
+                                     principal_arn,
+                                     assertion,
+                                     logger,
+                                     profile,
+                                     verbose,
+                                     cache,
+                                     alias,
+                                     option)
 
-    okta_auth_config.save_chosen_role_for_profile(okta_profile, role_arn)
+
+def setup_credentials(okta_auth_config, okta_profile, role_arn, aws_auth, principal_arn, assertion, logger, profile, verbose, cache, alias, option):
+    if okta_auth_config is not None:
+        okta_auth_config.save_chosen_role_for_profile(okta_profile, role_arn)
     duration = okta_auth_config.duration_for(okta_profile)
 
     sts_token = aws_auth.get_sts_token(
@@ -41,20 +58,16 @@ def get_credentials(aws_auth, okta_profile, profile, verbose, logger, totp_token
     session_token_expiry = sts_token['Expiration']
     logger.info("Session token expires on: %s" % session_token_expiry)
     if not profile:
-        exports = console_output(access_key_id, secret_access_key,
-                                 session_token, verbose)
+        exports = console_output(access_key_id, secret_access_key, session_token, verbose)
         if cache:
-            cache = open("%s/.okta-credentials.cache" %
-                         (os.path.expanduser('~'),), 'w')
+            cache = open(os.path.join(os.path.expanduser('~'), ".okta-credentials.cache"), 'w')
             cache.write(exports)
             cache.close()
         exit(0)
     else:
         if alias:
-            aws_auth.write_sts_token(option.alias_name, access_key_id,
-                                     secret_access_key, session_token)
-        aws_auth.write_sts_token(profile, access_key_id,
-                                 secret_access_key, session_token)
+            aws_auth.write_sts_token(option.alias_name, access_key_id, secret_access_key, session_token)
+        aws_auth.write_sts_token(profile, access_key_id, secret_access_key, session_token)
 
     return profile
 
@@ -113,16 +126,13 @@ def main(okta_profile, profile, verbose, version, debug, force, cache, awscli_ar
         force = True
 
     aws_auth = AwsAuth(profile, okta_profile, verbose, logger)
+    okta_auth_config = OktaAuthConfig(logger)
     if not aws_auth.check_sts_token(profile) or force:
         if force and profile:
-            logger.info("Force option selected, \
-                getting new credentials anyway.")
+            logger.info("Force option selected, getting new credentials anyway.")
         elif force:
-            logger.info("Force option selected, but no profile provided. \
-                Option has no effect.")
-        profile = get_credentials(
-            aws_auth, okta_profile, profile, verbose, logger, token, cache, alias
-        )
+            logger.info("Force option selected, but no profile provided. Option has no effect.")
+        profile = get_credentials(aws_auth, okta_profile, profile, verbose, logger, token, cache, alias, okta_auth_config)
 
     if awscli_args:
         cmdline = ['aws', '--profile', profile] + list(awscli_args)

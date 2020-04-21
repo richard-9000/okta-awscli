@@ -40,8 +40,7 @@ class AwsAuth:
                 self.logger.info("Using predefined role: %s" % self.role)
                 return predefined_role
             else:
-                self.logger.info("""Predefined role, %s, not found in the list
-of roles assigned to you.""" % self.role)
+                self.logger.info("""Predefined role, %s, not found in the list of roles assigned to you.""" % self.role)
                 self.logger.info("Please choose a role.")
 
         alias_map = self.__get_account_alias(assertion)
@@ -49,8 +48,12 @@ of roles assigned to you.""" % self.role)
         for option in role_options:
             print(option.option_text)
 
-        role_choice = int(input('Please select the AWS role: ')) - 1
-        return roles[role_choice], role_options[role_choice]
+        role_choice = input('Please select the AWS role: ')
+        if len(role_choice) == 1:
+            return [(roles[int(role_choice) - 1], role_options[int(role_choice) - 1])]
+        else:
+            choices = [int(r.strip()) - 1 for r in role_choice.split(",")]
+            return [(roles[c], role_options[c]) for c in choices]
 
     @staticmethod
     def __get_account_alias(assertion):
@@ -167,7 +170,7 @@ of roles assigned to you.""" % self.role)
         for index, role in enumerate(roles):
             (account_number, role_name) = re.findall(r'arn:aws:iam::(\d{12}):role.*/([^/]+)$', role.role_arn)[0]
             if account_number in alias_map:
-                role_text = "%d: %s (%s)" % (index + 1, alias_map[account_number], role.role_arn)
+                role_text = "%d: %-15s (%s)" % (index + 1, alias_map[account_number], role.role_arn)
                 alias_name = alias_map[account_number]
             else:
                 role_text = "%d: %s" % (index + 1, role.role_arn)
