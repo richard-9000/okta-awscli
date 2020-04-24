@@ -16,14 +16,14 @@ class AwsAuth:
 
     def __init__(self, profile, okta_profile, verbose, logger):
         home_dir = os.path.expanduser('~')
-        self.creds_dir = home_dir + "/.aws"
-        self.creds_file = self.creds_dir + "/credentials"
+        self.creds_dir = os.path.join(home_dir, ".aws")
+        self.creds_file = os.path.join(self.creds_dir, "credentials")
         self.profile = profile
         self.verbose = verbose
         self.logger = logger
         self.role = ""
 
-        okta_config = home_dir + '/.okta-aws'
+        okta_config = os.path.join(home_dir, '.okta-aws')
         parser = RawConfigParser()
         parser.read(okta_config)
 
@@ -31,7 +31,7 @@ class AwsAuth:
             self.role = parser.get(okta_profile, 'role')
             self.logger.debug("Setting AWS role to %s" % self.role)
 
-    def choose_aws_role(self, assertion):
+    def choose_aws_role(self, assertion, defaults):
         """ Choose AWS role from SAML assertion """
         roles = self.__extract_available_roles_from(assertion)
         if self.role:
@@ -45,15 +45,27 @@ class AwsAuth:
 
         alias_map = self.__get_account_alias(assertion)
         role_options = self.__create_options_from(roles, alias_map)
-        for option in role_options:
-            print(option.option_text)
+        default_idxs = [r for (r, i) in enumerate(roles) if i[1] in defaults]
+        idx_display = ','.join(map(str, default_idxs))
+        role_choice = AwsAuth.choose_roles(role_options, idx_display, default_idxs)
 
-        role_choice = input('Please select the AWS role: ')
         if len(role_choice) == 1:
             return [(roles[int(role_choice) - 1], role_options[int(role_choice) - 1])]
         else:
             choices = [int(r.strip()) - 1 for r in role_choice.split(",")]
             return [(roles[c], role_options[c]) for c in choices]
+
+    @staticmethod
+    def choose_roles(role_options, idx_display, default_idxs):
+        for option in role_options:
+            print(option.option_text)
+        while True:
+            role_choice = input('Please select one more or AWS roles [{}]:  '.format(idx_display))
+            if len(role_choice) <= 0 and len(default_idxs) >= 1:
+                return idx_display
+            elif len(role_choice) >= 1:
+                return role_choice
+            print("You did not make a selection, please choose an option.")
 
     @staticmethod
     def __get_account_alias(assertion):
