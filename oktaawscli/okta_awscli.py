@@ -17,27 +17,34 @@ def get_credentials(aws_auth, okta_profile, profile, verbose, logger, totp_token
 
     _, assertion = okta.get_assertion()
     if not alias:
-        role = aws_auth.choose_aws_role(assertion)
+        role = aws_auth.choose_aws_role(assertion, [])
         principal_arn, role_arn = role
-        return setup_credentials(okta_auth_config, okta_profile, role_arn, aws_auth, principal_arn, assertion, logger, profile, verbose, cache, alias, None)
+        return [setup_credentials(okta_auth_config, okta_profile, role_arn, aws_auth, principal_arn, assertion, logger, profile, verbose, cache, alias, None)]
     else:
-        choices = aws_auth.choose_aws_role(assertion)
+        default_roles = okta_auth_config.selected_roles_for(okta_profile)
+        choices = aws_auth.choose_aws_role(assertion, default_roles)
+        profiles = []
+        if okta_auth_config is not None:
+            profile_names = [c[0][1] for c in choices]
+            logger.info("Saving profiles as default: %s" % profile_names)
+            okta_auth_config.save_selected_roles(okta_profile, profile_names)
         for c in choices:
             (role, option) = c
             principal_arn, role_arn = role
             okta_profile = profile = "%s-%s" % (option.alias_name, option.role_name)
-            return setup_credentials(okta_auth_config,
-                                     okta_profile,
-                                     role_arn,
-                                     aws_auth,
-                                     principal_arn,
-                                     assertion,
-                                     logger,
-                                     profile,
-                                     verbose,
-                                     cache,
-                                     alias,
-                                     option)
+            profiles.append(setup_credentials(okta_auth_config,
+                                              okta_profile,
+                                              role_arn,
+                                              aws_auth,
+                                              principal_arn,
+                                              assertion,
+                                              logger,
+                                              profile,
+                                              verbose,
+                                              cache,
+                                              alias,
+                                              option))
+        return profiles
 
 
 def setup_credentials(okta_auth_config, okta_profile, role_arn, aws_auth, principal_arn, assertion, logger, profile, verbose, cache, alias, option):
