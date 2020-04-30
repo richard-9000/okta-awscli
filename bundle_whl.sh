@@ -1,5 +1,5 @@
 #!/bin/bash
-# Used after building, bundle the egg for a quick install shell script.
+# Used after building, bundle the whl for a quick install shell script.
 
 set -e
 
@@ -12,6 +12,8 @@ usage () {
 
 (
 
+lastbuild=`cd dist && ls -x1 *.whl|tail -1`
+
 # Print the script header
 cat <<MAGIC
 #!/bin/bash
@@ -21,19 +23,20 @@ cat > ~/.okta-aws <<EOF
 base-url = $1.okta.com
 EOF
 flag="-d"; [ \`uname\` == "Linux" ] || flag="-D"
-base64 \$flag > $1_install.egg <<EOFEGGFILE
+base64 \$flag > "$lastbuild" <<EOFWHLFILE
 MAGIC
 
-# Print base64 of the egg file
-cat `ls -x1 dist/*.egg|tail -1` | base64
+# Print base64 of the whl file
+cat "dist/$lastbuild" | base64
 
 # Print the script footer
 cat <<MAGIC
-EOFEGGFILE
+EOFWHLFILE
 if [ \`id -un\` = "root" ]; then
-  python3 -m easy_install lendingclub_install.egg
+  python3 -m pip install $lastbuild
 else
-  PYTHONUSERBASE=~/.local/ python3 -m easy_install --user lendingclub_install.egg
+  export PYTHONUSERBASE=~/.local/
+  python3 -m pip install --user $lastbuild
   cat <<'INSTALLMSG'
 The okta aws cli has been installed in your home directory, and can
 be run with the following command:
@@ -46,7 +49,7 @@ PATH="\$PATH:~/.local/bin"
 
 INSTALLMSG
 fi
-rm $1_install.egg
+rm $lastbuild
 MAGIC
 
 ) > "$1_okta_awscli_install.sh"

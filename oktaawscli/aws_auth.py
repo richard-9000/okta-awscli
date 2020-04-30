@@ -9,6 +9,7 @@ import boto3
 from botocore.exceptions import ClientError
 import re
 import requests
+import time
 
 
 class AwsAuth:
@@ -152,6 +153,7 @@ class AwsAuth:
         config.set(profile, 'aws_access_key_id', access_key_id)
         config.set(profile, 'aws_secret_access_key', secret_access_key)
         config.set(profile, 'aws_session_token', session_token)
+        config.set(profile, 'okta_login_time', str(int(time.time())))
 
         with open(self.creds_file, 'w+') as configfile:
             config.write(configfile)
