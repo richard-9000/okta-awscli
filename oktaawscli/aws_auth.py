@@ -47,7 +47,7 @@ class AwsAuth:
         alias_map = self.__get_account_alias(assertion)
         role_options = self.__create_options_from(roles, alias_map)
         default_idxs = [r for (r, i) in enumerate(roles) if i[1] in defaults]
-        idx_display = ','.join(map(str, default_idxs))
+        idx_display = ','.join(map(lambda x: str(x + 1), default_idxs))
         role_choice = AwsAuth.choose_roles(role_options, idx_display, default_idxs)
 
         if len(role_choice) == 1:
