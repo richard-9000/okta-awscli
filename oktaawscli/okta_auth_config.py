@@ -17,6 +17,7 @@ class OktaAuthConfig:
     def __init__(self, logger, file_handle=None):
         self.logger = logger
         self.file_handle = file_handle
+        self.password = None
         if file_handle is not None:
             self._value = RawConfigParser()
             self._value.read_file(self.file_handle)
@@ -68,11 +69,13 @@ class OktaAuthConfig:
 
     def password_for(self, okta_profile):
         """ Gets password from config """
+        if self.password is not None:
+            return self.password
         if self._value.has_option(okta_profile, 'password'):
-            password = self._value.get(okta_profile, 'password')
+            self.password = self._value.get(okta_profile, 'password')
         else:
-            password = getpass('Enter password: ')
-        return password
+            self.password = getpass('Enter password: ')
+        return self.password
 
     def factor_for(self, okta_profile):
         """ Gets factor from config """

@@ -25,7 +25,7 @@ except NameError:
     pass
 
 
-class OktaAuth():
+class OktaAuth:
     """ Handles auth to Okta and returns SAML assertion """
 
     def __init__(self, okta_profile, verbose, logger, totp_token, okta_auth_config):
@@ -294,8 +294,7 @@ Please enroll an MFA factor in the Okta Web UI first!""")
         flow_state = self._get_initial_flow_state(embed_link, state_token)
 
         while flow_state.get('apiResponse').get('status') != 'SUCCESS':
-            flow_state = self._next_login_step(
-                flow_state.get('stateToken'), flow_state.get('apiResponse'))
+            flow_state = self._next_login_step(flow_state.get('stateToken'), flow_state.get('apiResponse'))
 
         return flow_state['apiResponse']
 
@@ -340,7 +339,6 @@ Please enroll an MFA factor in the Okta Web UI first!""")
             headers=self._get_headers(),
             verify=self._verify_ssl_certs
         )
-
         return {'stateToken': state_token, 'apiResponse': response.json()}
 
     @staticmethod
@@ -428,14 +426,21 @@ Please enroll an MFA factor in the Okta Web UI first!""")
             return self._login_input_mfa_challenge(state_token, factor['_links']['verify']['href'])
         elif factor['factorType'] == 'token':
             return self._login_input_mfa_challenge(state_token, factor['_links']['verify']['href'])
+        elif factor['factorType'] == 'token:hardware':
+            return self._login_input_mfa_challenge(state_token, factor['_links']['verify']['href'], True)
         elif factor['factorType'] == 'push':
             return self._login_send_push(state_token, factor)
 
-    def _login_input_mfa_challenge(self, state_token, next_url):
+    def _login_input_mfa_challenge(self, state_token, next_url, is_hardware=False):
         """ Submit verification code for SMS or TOTP authentication methods"""
-        pass_code = self._mfa_code;
+
+        pass_code = self._mfa_code
         if pass_code is None:
             pass_code = input("Enter verification code: ")
+
+        if is_hardware:
+            pass_code = "{},{}".format(self.okta_auth_config.password_for(self.okta_profile), pass_code)
+
         response = self.session.post(
             next_url,
             json={'stateToken': state_token, 'passCode': pass_code},
